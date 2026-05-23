@@ -13,10 +13,20 @@
  */
 
 import { PrismaClient, Role, CourseStatus, TransactionType, TransactionStatus } from "@prisma/client";
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import bcrypt from "bcryptjs";
 import { englishCourseModules } from "./seed-data";
 
-const db = new PrismaClient();
+function createDb(): PrismaClient {
+  const url = process.env.DATABASE_URL ?? "file:./dev.db";
+  if (url.startsWith("libsql:") || url.startsWith("https:")) {
+    const adapter = new PrismaLibSQL({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+    return new PrismaClient({ adapter });
+  }
+  return new PrismaClient();
+}
+
+const db = createDb();
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "admin@eduta.local";
 const WELCOME_BONUS = 500_000;

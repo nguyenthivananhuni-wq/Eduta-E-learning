@@ -21,6 +21,8 @@
     "@anthropic-ai/sdk": "^0.98.0",
     "@auth/prisma-adapter": "^2.11.2",
     "@hookform/resolvers": "^5.2.2",
+    "@libsql/client": "^0.17.3",
+    "@prisma/adapter-libsql": "^6.19.3",
     "@prisma/client": "^6.19.3",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
