@@ -49,6 +49,10 @@ export async function enrollCourse(
   if (course.status !== "APPROVED") {
     return { ok: false, error: "Khóa học chưa được duyệt" };
   }
+  // Giảng viên/admin không thể ghi danh khóa học của chính mình (đồng bộ với chặn tự đánh giá).
+  if (course.instructorId && course.instructorId === userId) {
+    return { ok: false, error: "Bạn không thể ghi danh khóa học của chính mình" };
+  }
 
   const firstLesson = course.modules[0]?.lessons[0];
   if (!firstLesson) {

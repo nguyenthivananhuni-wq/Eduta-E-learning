@@ -9,6 +9,7 @@ import {
   FileQuestion,
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth-helpers";
+import { can } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,7 @@ export default async function CourseAnalyticsPage({ params }: { params: Params }
   if (!course) notFound();
 
   const isOwner = course.instructorId === session.user.id;
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = can(session.user.role, "moderate");
   if (!isOwner && !isAdmin) {
     redirect("/instructor/courses");
   }

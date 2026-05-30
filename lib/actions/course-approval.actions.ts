@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireAdmin, requireInstructor } from "@/lib/auth-helpers";
+import { can } from "@/lib/auth/roles";
 
 type Result<T = unknown> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -26,7 +27,7 @@ export async function submitForReview(courseId: string): Promise<Result> {
   });
   if (!course) return { ok: false, error: "Không tìm thấy khóa học" };
 
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = can(session.user.role, "moderate");
   if (!isAdmin && course.instructorId !== session.user.id) {
     return { ok: false, error: "Không có quyền submit khóa học này" };
   }

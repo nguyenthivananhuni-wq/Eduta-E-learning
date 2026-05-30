@@ -4,13 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
+import { homePathFor } from "@/lib/auth/roles";
 
 export function LoginForm() {
   const router = useRouter();
@@ -39,7 +40,9 @@ export function LoginForm() {
         return;
       }
       toast.success("Đăng nhập thành công");
-      router.push("/dashboard");
+      // Điều hướng về đúng "nhà" của vai trò
+      const session = await getSession();
+      router.push(homePathFor(session?.user?.role));
       router.refresh();
     });
   };

@@ -1,10 +1,19 @@
 import Link from "next/link";
+import { AlertCircle } from "lucide-react";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata = { title: "Đăng nhập" };
 
-export default function LoginPage() {
+type SearchParams = Promise<{ suspended?: string }>;
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const { suspended } = await searchParams;
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="space-y-1">
@@ -14,6 +23,14 @@ export default function LoginPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {suspended && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertCircle className="size-4 shrink-0 mt-0.5" />
+            <span>
+              Tài khoản của bạn đã bị tạm khóa. Vui lòng liên hệ hỗ trợ nếu cần làm rõ.
+            </span>
+          </div>
+        )}
         <LoginForm />
       </CardContent>
       <CardFooter className="flex justify-center text-sm">

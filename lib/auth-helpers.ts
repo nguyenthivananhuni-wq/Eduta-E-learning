@@ -1,24 +1,45 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { can, type Role } from "@/lib/auth/roles";
+
+/**
+ * Re-check user với DB ở mỗi request (NODE runtime).
+ * Vá lỗ hổng JWT: tài khoản bị khóa/xóa hoặc đổi role chỉ có hiệu lực khi token hết hạn.
+ * Bọc trong `cache()` để dedupe khi nhiều helper gọi trong cùng một lần render.
+ */
+const getFreshUser = cache(
+  async (userId: string): Promise<{ role: Role; suspended: boolean } | null> => {
+    return db.user.findUnique({
+      where: { id: userId },
+      select: { role: true, suspended: true },
+    });
+  }
+);
 
 export async function requireAuth() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const fresh = await getFreshUser(session.user.id);
+  if (!fresh) redirect("/login"); // tài khoản đã bị xóa
+  if (fresh.suspended) redirect("/login?suspended=1"); // khóa có hiệu lực ngay
+
+  // Dùng role tươi từ DB (đổi role có hiệu lực ngay, không cần đăng nhập lại)
+  session.user.role = fresh.role;
   return session;
 }
 
 export async function requireAdmin() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/");
+  const session = await requireAuth();
+  if (!can(session.user.role, "moderate")) redirect("/");
   return session;
 }
 
 export async function requireInstructor() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (session.user.role !== "INSTRUCTOR" && session.user.role !== "ADMIN") {
+  const session = await requireAuth();
+  if (!can(session.user.role, "teach")) {
     redirect("/become-instructor");
   }
   return session;
@@ -39,8 +60,8 @@ export async function assertCourseEditAccess(courseId: string): Promise<string |
   if (!session?.user) return "Chưa đăng nhập";
 
   const role = session.user.role;
-  if (role === "ADMIN") return null;
-  if (role !== "INSTRUCTOR") return "Không có quyền";
+  if (can(role, "moderate")) return null;
+  if (!can(role, "teach")) return "Không có quyền";
 
   const course = await db.course.findUnique({
     where: { id: courseId },

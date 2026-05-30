@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth-helpers";
+import { can } from "@/lib/auth/roles";
 import {
   getReviewInsight,
   invalidateCourseInsight,
@@ -21,7 +22,7 @@ export async function refreshReviewInsight(courseId: string): Promise<Result> {
   });
   if (!course) return { ok: false, error: "Không tìm thấy khóa học" };
 
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = can(session.user.role, "moderate");
   const isOwner = course.instructorId === session.user.id;
   if (!isAdmin && !isOwner) {
     return { ok: false, error: "Bạn không có quyền cập nhật phân tích này" };

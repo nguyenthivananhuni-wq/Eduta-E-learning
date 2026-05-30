@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth, requireAdmin } from "@/lib/auth-helpers";
+import { can } from "@/lib/auth/roles";
 import {
   instructorApplicationSchema,
   rejectApplicationSchema,
@@ -14,7 +15,7 @@ export async function applyInstructor(input: unknown): Promise<Result> {
   const session = await requireAuth();
   const userId = session.user.id;
 
-  if (session.user.role === "INSTRUCTOR" || session.user.role === "ADMIN") {
+  if (can(session.user.role, "teach")) {
     return { ok: false, error: "Bạn đã là giảng viên" };
   }
 

@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { can, homePathFor } from "@/lib/auth/roles";
 
 export const authConfig = {
   pages: {
@@ -8,8 +9,8 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const role = auth?.user?.role;
-      const isAdmin = role === "ADMIN";
-      const isInstructor = role === "INSTRUCTOR" || isAdmin;
+      const isAdmin = can(role, "moderate");
+      const isInstructor = can(role, "teach");
 
       const isOnAdmin = nextUrl.pathname.startsWith("/admin");
       const isOnInstructor = nextUrl.pathname.startsWith("/instructor");
@@ -26,7 +27,10 @@ export const authConfig = {
       if (isOnInstructor) return isInstructor;
       if (isOnStudentArea) return isLoggedIn;
       if (isOnAuth && isLoggedIn) {
-        return Response.redirect(new URL("/dashboard", nextUrl));
+        // Tài khoản bị khóa được đẩy về /login?suspended=1 — cho hiển thị để tránh vòng lặp redirect
+        if (nextUrl.searchParams.get("suspended")) return true;
+        // Đăng nhập xong → về đúng "nhà" của vai trò (admin/instructor/student)
+        return Response.redirect(new URL(homePathFor(role), nextUrl));
       }
       return true;
     },

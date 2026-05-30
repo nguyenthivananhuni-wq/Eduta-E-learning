@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireInstructor } from "@/lib/auth-helpers";
+import { can } from "@/lib/auth/roles";
 import { courseSchema } from "@/lib/validations/course";
 
 type Result<T = unknown> = ({ ok: true } & T) | { ok: false; error: string };
@@ -16,7 +17,7 @@ async function assertCourseOwnership(id: string) {
   });
   if (!course) return { ok: false as const, error: "Không tìm thấy khóa học" };
 
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = can(session.user.role, "moderate");
   if (!isAdmin && course.instructorId !== session.user.id) {
     return { ok: false as const, error: "Bạn không có quyền chỉnh sửa khóa học này" };
   }
@@ -25,6 +26,11 @@ async function assertCourseOwnership(id: string) {
 
 export async function createCourse(input: unknown): Promise<Result<{ id: string }>> {
   const session = await requireInstructor();
+
+  // Admin chỉ kiểm duyệt, không sở hữu/bán khóa học (tránh xung đột lợi ích).
+  if (can(session.user.role, "moderate")) {
+    return { ok: false, error: "Admin chỉ kiểm duyệt, không tạo khóa học." };
+  }
 
   const parsed = courseSchema.safeParse(input);
   if (!parsed.success) {

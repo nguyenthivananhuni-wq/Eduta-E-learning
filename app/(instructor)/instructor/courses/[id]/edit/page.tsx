@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ExternalLink, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
 import { auth } from "@/auth";
+import { can } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,7 +49,7 @@ export default async function InstructorEditCoursePage({
 
   if (!course) notFound();
 
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = can(session.user.role, "moderate");
   if (!isAdmin && course.instructorId !== session.user.id) {
     redirect("/instructor/courses");
   }

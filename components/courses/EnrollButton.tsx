@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { PlayCircle, ShoppingCart, LogIn, Ban, Loader2, Wallet } from "lucide-react";
+import { PlayCircle, ShoppingCart, LogIn, Ban, Loader2, Wallet, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { enrollCourse } from "@/lib/actions/enrollment.actions";
 import { formatVND } from "@/lib/utils/format";
@@ -16,6 +16,7 @@ type Props = {
   isEnrolled: boolean;
   isLoggedIn: boolean;
   isComingSoon: boolean;
+  isOwner?: boolean;
   price: number;
   balance: number;
 };
@@ -27,11 +28,24 @@ export function EnrollButton({
   isEnrolled,
   isLoggedIn,
   isComingSoon,
+  isOwner,
   price,
   balance,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // Chủ khóa học không thể tự ghi danh — hiện lối quản lý thay vì nút mua/học.
+  if (isOwner) {
+    return (
+      <Button size="lg" variant="outline" asChild className="w-full">
+        <Link href={`/instructor/courses/${courseId}/edit`}>
+          <Pencil className="size-4" />
+          Quản lý khóa học của bạn
+        </Link>
+      </Button>
+    );
+  }
 
   if (isComingSoon) {
     return (

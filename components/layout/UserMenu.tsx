@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { can, areaLabel, type Role } from "@/lib/auth/roles";
 
 type Props = {
-  user: { name: string; email: string; role: "STUDENT" | "INSTRUCTOR" | "ADMIN" };
+  user: { name: string; email: string; role: Role };
 };
 
 function getInitials(name: string): string {
@@ -43,9 +44,12 @@ export function UserMenu({ user }: Props) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
+          <div className="flex flex-col space-y-1.5">
             <p className="text-sm font-medium">{user.name}</p>
             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+            <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+              {areaLabel(user.role)}
+            </span>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -61,7 +65,15 @@ export function UserMenu({ user }: Props) {
             Ví của tôi
           </Link>
         </DropdownMenuItem>
-        {(user.role === "INSTRUCTOR" || user.role === "ADMIN") && (
+        {(can(user.role, "teach") || can(user.role, "moderate")) && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+              Chuyển khu vực
+            </DropdownMenuLabel>
+          </>
+        )}
+        {can(user.role, "teach") && (
           <DropdownMenuItem asChild>
             <Link href="/instructor">
               <GraduationCap className="size-4" />
@@ -69,7 +81,7 @@ export function UserMenu({ user }: Props) {
             </Link>
           </DropdownMenuItem>
         )}
-        {user.role === "ADMIN" && (
+        {can(user.role, "moderate") && (
           <DropdownMenuItem asChild>
             <Link href="/admin">
               <Shield className="size-4" />

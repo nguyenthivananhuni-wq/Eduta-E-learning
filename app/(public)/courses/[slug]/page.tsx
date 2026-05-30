@@ -2,6 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Clock, BookOpen, Users, PlayCircle, FileQuestion, CheckCircle2 } from "lucide-react";
 import { auth } from "@/auth";
+import { can } from "@/lib/auth/roles";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -52,7 +53,7 @@ export default async function CourseDetailPage({ params }: { params: Params }) {
   const userRole = session?.user?.role;
 
   const isOwner = userId && course.instructorId === userId;
-  const isAdmin = userRole === "ADMIN";
+  const isAdmin = can(userRole, "moderate");
   if (course.status !== "APPROVED" && !isOwner && !isAdmin) notFound();
 
   const totalLessons = course.modules.reduce((sum, m) => sum + m.lessons.length, 0);
@@ -294,6 +295,7 @@ export default async function CourseDetailPage({ params }: { params: Params }) {
                 isEnrolled={enrolled}
                 isLoggedIn={!!userId}
                 isComingSoon={isComingSoon}
+                isOwner={!!isOwner}
                 price={course.price}
                 balance={balance}
               />

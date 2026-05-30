@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ApplicationForm } from "@/components/instructor/ApplicationForm";
 import { INSTRUCTOR_EARNING_PERCENT, PLATFORM_FEE_PERCENT } from "@/lib/constants";
+import { can } from "@/lib/auth/roles";
 
 export const metadata = { title: "Trở thành giảng viên" };
 
@@ -23,7 +24,7 @@ export default async function BecomeInstructorPage() {
     });
   }
 
-  const isAlreadyInstructor = role === "INSTRUCTOR" || role === "ADMIN";
+  const isAlreadyInstructor = can(role, "teach");
 
   return (
     <div className="container max-w-3xl mx-auto px-4 py-10 space-y-8">

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { Plus, BookOpen } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { db } from "@/lib/db";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -29,19 +28,11 @@ export default async function AdminCoursesPage() {
 
   return (
     <div className="container max-w-7xl mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Quản lý khóa học</h1>
-          <p className="text-muted-foreground mt-1">
-            Tổng cộng {courses.length} khóa học
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/admin/courses/new">
-            <Plus className="size-4" />
-            Tạo khóa mới
-          </Link>
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Quản lý khóa học</h1>
+        <p className="text-muted-foreground mt-1">
+          Tổng cộng {courses.length} khóa học — kiểm duyệt, chỉnh sửa và gỡ bỏ.
+        </p>
       </div>
 
       <Card>
@@ -50,9 +41,9 @@ export default async function AdminCoursesPage() {
             <div className="text-center py-16">
               <BookOpen className="size-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">Chưa có khóa học nào</p>
-              <Button asChild className="mt-4">
-                <Link href="/admin/courses/new">Tạo khóa đầu tiên</Link>
-              </Button>
+              <p className="text-sm text-muted-foreground mt-1">
+                Khóa học do giảng viên tạo sẽ xuất hiện ở đây để bạn kiểm duyệt.
+              </p>
             </div>
           ) : (
             <Table>
