@@ -1,8 +1,14 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
 export type CourseSort = "newest" | "rating" | "price-asc" | "price-desc";
+
+/** Giới hạn số khóa trả về cho catalog để truy vấn không phình theo dữ liệu. */
+const CATALOG_LIMIT = 60;
+/** Thời gian cache (giây) cho danh sách khóa học công khai. */
+const COURSE_LIST_TTL = 60;
 
 type ListFilter = {
   q?: string;
@@ -25,39 +31,50 @@ function buildOrderBy(sort?: CourseSort): Prisma.CourseOrderByWithRelationInput[
 }
 
 export async function getPublishedCourses(filter: ListFilter = {}) {
-  return db.course.findMany({
-    where: {
-      status: "APPROVED",
-      ...(filter.q
-        ? {
-            OR: [
-              { title: { contains: filter.q } },
-              { description: { contains: filter.q } },
-            ],
-          }
-        : {}),
-      ...(filter.category ? { category: filter.category } : {}),
-    },
-    orderBy: buildOrderBy(filter.sort),
-    include: {
-      _count: { select: { modules: true, enrollments: true } },
-    },
-  });
+  // Cache theo bộ lọc; làm tươi sau COURSE_LIST_TTL hoặc khi revalidateTag("courses").
+  const cached = unstable_cache(
+    async (f: ListFilter) =>
+      db.course.findMany({
+        where: {
+          status: "APPROVED",
+          ...(f.q
+            ? {
+                OR: [
+                  { title: { contains: f.q } },
+                  { description: { contains: f.q } },
+                ],
+              }
+            : {}),
+          ...(f.category ? { category: f.category } : {}),
+        },
+        orderBy: buildOrderBy(f.sort),
+        take: CATALOG_LIMIT,
+        include: {
+          _count: { select: { modules: true, enrollments: true } },
+        },
+      }),
+    ["published-courses", filter.q ?? "", filter.category ?? "", filter.sort ?? "newest"],
+    { revalidate: COURSE_LIST_TTL, tags: ["courses"] }
+  );
+  return cached(filter);
 }
 
-export async function getFeaturedCourses(take = 3) {
-  return db.course.findMany({
-    where: {
-      status: "APPROVED",
-      modules: { some: { lessons: { some: {} } } },
-    },
-    orderBy: [{ enrollments: { _count: "desc" } }, { createdAt: "desc" }],
-    take,
-    include: {
-      _count: { select: { modules: true, enrollments: true } },
-    },
-  });
-}
+export const getFeaturedCourses = unstable_cache(
+  async (take = 3) =>
+    db.course.findMany({
+      where: {
+        status: "APPROVED",
+        modules: { some: { lessons: { some: {} } } },
+      },
+      orderBy: [{ enrollments: { _count: "desc" } }, { createdAt: "desc" }],
+      take,
+      include: {
+        _count: { select: { modules: true, enrollments: true } },
+      },
+    }),
+  ["featured-courses"],
+  { revalidate: COURSE_LIST_TTL, tags: ["courses"] }
+);
 
 export async function getCourseBySlug(slug: string) {
   return db.course.findUnique({

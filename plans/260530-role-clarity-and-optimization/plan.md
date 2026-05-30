@@ -24,7 +24,7 @@ UX; admin không bán khóa; vá nhất quán.
 | 03 | [Chính sách admin không bán khóa](phase-03-admin-policy.md) | ✅ Xong (typecheck pass) | Có (bỏ tạo khóa của admin) |
 | 04 | [Vá nhất quán enroll](phase-04-consistency-patches.md) | ✅ Xong (typecheck pass) | Có (chặn tự ghi danh) |
 | 05 | [Vá bảo mật session (suspended/role)](phase-05-session-security.md) | ✅ Xong (typecheck pass) | Có (khóa user hiệu lực ngay) |
-| 06 | [Build, kiểm tra & redeploy](phase-06-build-deploy.md) | ⬜ Chưa làm | Có (deploy) |
+| 06 | [Build, kiểm tra & redeploy](phase-06-build-deploy.md) | ✅ Build pass + push main (Vercel auto-deploy) | Có (deploy) |
 
 ## Thứ tự thực thi
 01 → 02 → 03 → 04 → 05 → 06. Sau mỗi phase 01–05: chạy `npm run typecheck`. Phase 06 build + deploy.

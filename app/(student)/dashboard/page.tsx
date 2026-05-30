@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, ArrowRight, Star } from "lucide-react";
@@ -5,11 +6,31 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CourseCard } from "@/components/courses/CourseCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ReviewForm } from "@/components/reviews/ReviewForm";
 import { RecommendationsSection } from "@/components/dashboard/RecommendationsSection";
 import { getUnreviewedEnrolledCourses } from "@/lib/queries/review.queries";
+
+function RecommendationsSkeleton() {
+  return (
+    <section className="mb-8">
+      <Skeleton className="h-6 w-48 mb-3" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-xl border bg-card overflow-hidden">
+            <Skeleton className="aspect-video w-full" />
+            <div className="p-4 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export const metadata = { title: "Học của tôi" };
 
@@ -38,7 +59,9 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <RecommendationsSection userId={session.user.id} />
+      <Suspense fallback={<RecommendationsSkeleton />}>
+        <RecommendationsSection userId={session.user.id} />
+      </Suspense>
 
       {enrollments.length === 0 ? (
         <Card>

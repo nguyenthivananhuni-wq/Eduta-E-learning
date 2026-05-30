@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireAdmin, requireInstructor } from "@/lib/auth-helpers";
@@ -100,6 +100,7 @@ export async function approveCourse(courseId: string): Promise<Result> {
     revalidatePath("/admin/courses");
     revalidatePath("/admin/courses/pending");
     revalidatePath("/instructor/courses");
+    revalidateTag("courses");
     revalidatePath("/courses");
     revalidatePath(`/courses/${course.slug}`);
     return { ok: true };

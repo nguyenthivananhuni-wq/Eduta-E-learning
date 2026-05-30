@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireInstructor } from "@/lib/auth-helpers";
@@ -8,6 +8,12 @@ import { can } from "@/lib/auth/roles";
 import { courseSchema } from "@/lib/validations/course";
 
 type Result<T = unknown> = ({ ok: true } & T) | { ok: false; error: string };
+
+/** Làm tươi cache danh sách khóa học công khai (getFeaturedCourses/getPublishedCourses). */
+function revalidateCourseLists() {
+  revalidateTag("courses");
+  revalidatePath("/courses");
+}
 
 async function assertCourseOwnership(id: string) {
   const session = await requireInstructor();
@@ -47,7 +53,7 @@ export async function createCourse(input: unknown): Promise<Result<{ id: string 
     });
     revalidatePath("/admin/courses");
     revalidatePath("/instructor/courses");
-    revalidatePath("/courses");
+    revalidateCourseLists();
     return { ok: true, id: course.id };
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -72,7 +78,7 @@ export async function updateCourse(id: string, input: unknown): Promise<Result> 
     revalidatePath("/instructor/courses");
     revalidatePath(`/admin/courses/${id}/edit`);
     revalidatePath(`/instructor/courses/${id}/edit`);
-    revalidatePath("/courses");
+    revalidateCourseLists();
     revalidatePath(`/courses/${parsed.data.slug}`);
     return { ok: true };
   } catch (e) {
@@ -93,7 +99,7 @@ export async function deleteCourse(id: string): Promise<Result> {
     await db.course.delete({ where: { id } });
     revalidatePath("/admin/courses");
     revalidatePath("/instructor/courses");
-    revalidatePath("/courses");
+    revalidateCourseLists();
     return { ok: true };
   } catch {
     return { ok: false, error: "Không xóa được khóa học" };
