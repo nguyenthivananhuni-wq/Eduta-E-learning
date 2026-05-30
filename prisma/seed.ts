@@ -530,6 +530,65 @@ async function main() {
     `  ✓ ${txCount} transactions, ${enrollCount} enrollments, ${progressCount} lesson progress`
   );
 
+  // 7. Sample content reports (moderation demo)
+  console.log("→ Tạo báo cáo nội dung mẫu...");
+  await db.report.deleteMany({}); // idempotent: làm sạch trước khi seed lại
+
+  let reportCount = 0;
+
+  // PENDING — báo cáo 1 khóa học (Photoshop của instructor)
+  const photoshopCourse = await db.course.findUnique({
+    where: { slug: "photoshop-can-ban" },
+    select: { id: true },
+  });
+  if (photoshopCourse) {
+    await db.report.create({
+      data: {
+        reporterId: student3.id,
+        targetType: "COURSE",
+        targetId: photoshopCourse.id,
+        reason:
+          "Khóa học có nội dung gây hiểu lầm, tiêu đề không khớp với nội dung thực tế bên trong.",
+        status: "PENDING",
+      },
+    });
+    reportCount++;
+  }
+
+  // PENDING — báo cáo 1 đánh giá (review của student4 trên khóa Tiếng Anh 10)
+  const reportedReview = await db.review.findUnique({
+    where: { userId_courseId: { userId: student4.id, courseId: englishCourse.id } },
+    select: { id: true },
+  });
+  if (reportedReview) {
+    await db.report.create({
+      data: {
+        reporterId: student.id,
+        targetType: "REVIEW",
+        targetId: reportedReview.id,
+        reason: "Đánh giá mang tính công kích cá nhân, không liên quan tới chất lượng khóa học.",
+        status: "PENDING",
+      },
+    });
+    reportCount++;
+  }
+
+  // RESOLVED — 1 báo cáo đã xử lý (cho khu lịch sử)
+  await db.report.create({
+    data: {
+      reporterId: student2.id,
+      targetType: "COURSE",
+      targetId: englishCourse.id,
+      reason: "Nghi ngờ vi phạm bản quyền ảnh thumbnail.",
+      status: "RESOLVED",
+      resolvedBy: admin.id,
+      resolvedAt: new Date(),
+      resolution: "Chỉ ghi chú (không hành động) — Đã kiểm tra, ảnh dùng hợp lệ từ Unsplash.",
+    },
+  });
+  reportCount++;
+  console.log(`  ✓ ${reportCount} báo cáo mẫu (2 chờ xử lý + 1 đã xử lý)`);
+
   console.log("✅ Seed hoàn tất!");
   console.log("");
   console.log("Tài khoản test:");

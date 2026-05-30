@@ -1,9 +1,16 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth, requireAdmin } from "@/lib/auth-helpers";
-import { reportSchema, resolveSchema } from "@/lib/validations/report";
+import {
+  reportSchema,
+  resolveSchema,
+  actionsByTarget,
+  reportActionLabels,
+} from "@/lib/validations/report";
+import { recomputeCourseRating } from "@/lib/queries/review.queries";
+import { invalidateCourseInsight } from "@/lib/ai/review-insights";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -79,29 +86,157 @@ export async function reportContent(input: unknown): Promise<Result> {
 
 export async function resolveReport(reportId: string, input: unknown): Promise<Result> {
   const session = await requireAdmin();
+  const adminId = session.user.id;
 
   const parsed = resolveSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" };
   }
+  const { action, resolution } = parsed.data;
 
   const report = await db.report.findUnique({
     where: { id: reportId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, targetType: true, targetId: true, reporterId: true },
   });
   if (!report) return { ok: false, error: "Không tìm thấy báo cáo" };
   if (report.status !== "PENDING") return { ok: false, error: "Báo cáo đã được xử lý" };
 
-  await db.report.update({
-    where: { id: reportId },
-    data: {
-      status: "RESOLVED",
-      resolvedAt: new Date(),
-      resolvedBy: session.user.id,
-      resolution: parsed.data.resolution?.trim() ?? null,
-    },
-  });
+  // Guard: hành động phải hợp lệ với loại đối tượng
+  if (!actionsByTarget[report.targetType].includes(action)) {
+    return { ok: false, error: "Hành động không hợp lệ cho loại báo cáo này" };
+  }
 
+  // Side-effects cần chạy SAU transaction
+  let reviewCourseId: string | null = null;
+  let touchedCourse = false;
+  let touchedUser = false;
+
+  try {
+    await db.$transaction(async (tx) => {
+      if (action === "UNPUBLISH_COURSE") {
+        const course = await tx.course.findUnique({
+          where: { id: report.targetId },
+          select: { id: true, instructorId: true, title: true },
+        });
+        if (course) {
+          await tx.course.update({
+            where: { id: course.id },
+            data: {
+              status: "DRAFT",
+              rejectionReason: resolution?.trim() || "Bị gỡ duyệt do báo cáo vi phạm",
+              reviewedAt: new Date(),
+              reviewedBy: adminId,
+            },
+          });
+          if (course.instructorId) {
+            await tx.notification.create({
+              data: {
+                userId: course.instructorId,
+                type: "COURSE_UNPUBLISHED",
+                title: "Khóa học bị gỡ duyệt",
+                message: `"${course.title}" đã bị gỡ khỏi trang chính do báo cáo vi phạm. Bạn có thể chỉnh sửa và gửi duyệt lại.`,
+                link: `/instructor/courses/${course.id}/edit`,
+              },
+            });
+          }
+          touchedCourse = true;
+        }
+      } else if (action === "DELETE_COURSE") {
+        const course = await tx.course.findUnique({
+          where: { id: report.targetId },
+          select: { id: true, instructorId: true, title: true },
+        });
+        if (course) {
+          if (course.instructorId) {
+            await tx.notification.create({
+              data: {
+                userId: course.instructorId,
+                type: "COURSE_REMOVED",
+                title: "Khóa học bị gỡ bỏ",
+                message: `"${course.title}" đã bị gỡ khỏi Eduta do vi phạm bị báo cáo.`,
+                link: null,
+              },
+            });
+          }
+          await tx.course.delete({ where: { id: course.id } });
+          touchedCourse = true;
+        }
+      } else if (action === "DELETE_REVIEW") {
+        const review = await tx.review.findUnique({
+          where: { id: report.targetId },
+          select: { id: true, courseId: true },
+        });
+        if (review) {
+          await tx.review.delete({ where: { id: review.id } });
+          await recomputeCourseRating(review.courseId, tx);
+          reviewCourseId = review.courseId;
+        }
+      } else if (action === "SUSPEND_USER") {
+        const target = await tx.user.findUnique({
+          where: { id: report.targetId },
+          select: { id: true, role: true, suspended: true },
+        });
+        if (target) {
+          if (target.role === "ADMIN") throw new Error("CANNOT_SUSPEND_ADMIN");
+          if (target.id === adminId) throw new Error("CANNOT_SUSPEND_SELF");
+          if (!target.suspended) {
+            await tx.user.update({ where: { id: target.id }, data: { suspended: true } });
+            await tx.notification.create({
+              data: {
+                userId: target.id,
+                type: "ACCOUNT_SUSPENDED",
+                title: "Tài khoản đã bị tạm khóa",
+                message: "Admin đã tạm khóa tài khoản của bạn do vi phạm bị báo cáo.",
+                link: null,
+              },
+            });
+          }
+          touchedUser = true;
+        }
+      }
+
+      // Đóng report — ghi hành động vào resolution
+      const label = reportActionLabels[action];
+      const resolutionText = [label, resolution?.trim()].filter(Boolean).join(" — ");
+      await tx.report.update({
+        where: { id: reportId },
+        data: {
+          status: "RESOLVED",
+          resolvedAt: new Date(),
+          resolvedBy: adminId,
+          resolution: resolutionText,
+        },
+      });
+
+      // Thông báo lại người báo cáo
+      await tx.notification.create({
+        data: {
+          userId: report.reporterId,
+          type: "REPORT_RESOLVED",
+          title: "Báo cáo của bạn đã được xử lý",
+          message: `Cảm ơn bạn đã báo cáo. Kết quả xử lý: ${label}.`,
+          link: null,
+        },
+      });
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "CANNOT_SUSPEND_ADMIN") {
+      return { ok: false, error: "Không thể khóa tài khoản admin" };
+    }
+    if (e instanceof Error && e.message === "CANNOT_SUSPEND_SELF") {
+      return { ok: false, error: "Không thể tự khóa tài khoản của mình" };
+    }
+    return { ok: false, error: "Không xử lý được báo cáo, vui lòng thử lại" };
+  }
+
+  // Side-effects ngoài transaction
+  if (reviewCourseId) await invalidateCourseInsight(reviewCourseId);
+  if (touchedCourse) {
+    revalidateTag("courses");
+    revalidatePath("/courses");
+    revalidatePath("/admin/courses");
+  }
+  if (touchedUser) revalidatePath("/admin/users");
   revalidatePath("/admin/reports");
   revalidatePath("/admin");
   return { ok: true };
@@ -112,19 +247,30 @@ export async function dismissReport(reportId: string): Promise<Result> {
 
   const report = await db.report.findUnique({
     where: { id: reportId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, reporterId: true },
   });
   if (!report) return { ok: false, error: "Không tìm thấy báo cáo" };
   if (report.status !== "PENDING") return { ok: false, error: "Báo cáo đã được xử lý" };
 
-  await db.report.update({
-    where: { id: reportId },
-    data: {
-      status: "DISMISSED",
-      resolvedAt: new Date(),
-      resolvedBy: session.user.id,
-    },
-  });
+  await db.$transaction([
+    db.report.update({
+      where: { id: reportId },
+      data: {
+        status: "DISMISSED",
+        resolvedAt: new Date(),
+        resolvedBy: session.user.id,
+      },
+    }),
+    db.notification.create({
+      data: {
+        userId: report.reporterId,
+        type: "REPORT_DISMISSED",
+        title: "Báo cáo của bạn đã được xem xét",
+        message: "Cảm ơn bạn đã báo cáo. Admin đã xem xét và xác định không có vi phạm.",
+        link: null,
+      },
+    }),
+  ]);
 
   revalidatePath("/admin/reports");
   revalidatePath("/admin");
